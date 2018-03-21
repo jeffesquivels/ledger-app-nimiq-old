@@ -21,7 +21,7 @@ endif
 include $(BOLOS_SDK)/Makefile.defines
 
 APPNAME = Nimiq
-APP_LOAD_PARAMS=--appFlags 0x40 --path "44'" --curve ed25519 $(COMMON_LOAD_PARAMS)
+APP_LOAD_PARAMS=--appFlags 0x40 --path "44'/242'" --curve ed25519 $(COMMON_LOAD_PARAMS)
 
 APPVERSION_M=1
 APPVERSION_N=0

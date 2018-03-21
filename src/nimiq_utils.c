@@ -1,8 +1,6 @@
 /*******************************************************************************
  *   Ledger Nimiq App
- *   (c) 2017 Ledger
- *
- *  adapted from https://github.com/mjg59/tpmtotp/blob/master/base32.h
+ *   (c) 2018 Ledger
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,6 +21,17 @@
 #include "nimiq_utils.h"
 #include "blake2b.h"
 #include "base32.h"
+
+#define SIGNER_KEY_TYPE_ED25519 0
+#define SIGNER_KEY_TYPE_PRE_AUTH_TX 1
+#define SIGNER_KEY_TYPE_HASH_X 2
+
+static const char * captions[][5] = {
+    {"Basic Tx", NULL, NULL, NULL, NULL},
+    {"Extended Tx", "Data", "Sender", "Sender Type", "Recipient Type"} // For future use, not yet supported
+};
+
+static const uint8_t AMOUNT_MAX_SIZE = 17;
 
 void iban_check(char in[36], char *check) {
     unsigned int counter = 0;
@@ -77,15 +86,25 @@ void iban_check(char in[36], char *check) {
     snprintf(check, 3, "%02d", 98 - modulo);
 }
 
-void print_public_key(uint8_t *in, char *out) {
-    unsigned int counter = 4;
+void public_key_to_address(uint8_t *in, char *out) {
+    uint8_t buffer[35];
+    buffer[0] = 6 << 3; // version bit 'G'
+    int i;
+    for (i = 0; i < 32; i++) {
+        buffer[i+1] = in[i];
+    }
+    short crc = 0;
+    buffer[33] = crc;
+    buffer[34] = crc >> 8;
+    base32_encode(buffer, 35, out, 56);
+    out[56] = '\0';
+}
 
-    uint8_t after_blake[32] = { 0 };
+void print_address(uint8_t *in, char *out) {
+    unsigned int counter = 4;
     char after_base32[36] = { 0 };
 
-    blake2b(after_blake, 32, NULL, 0, in, 32);
-
-    base32_encode(after_blake, 20, after_base32, 32);
+    base32_encode(in, 20, after_base32, 32);
 
     after_base32[32] = 'N';
     after_base32[33] = 'Q';
@@ -103,5 +122,201 @@ void print_public_key(uint8_t *in, char *out) {
         counter += 4;
     }
 
+    // Make sure that the address string is always null-terminated
     out[44] = '\0';
+}
+
+void print_public_key(uint8_t *in, char *out) {
+    uint8_t after_blake[32] = { 0 };
+    uint8_t short_blake[20] = { 0 };
+
+    blake2b(after_blake, 32, NULL, 0, in, 32);
+    memcpy(short_blake, after_blake, 20);
+
+    print_address(short_blake, out);
+}
+
+void print_amount(uint64_t amount, char *asset, char *out) {
+    char buffer[AMOUNT_MAX_SIZE];
+    uint64_t dVal = amount;
+    int i, j;
+
+    memset(buffer, 0, AMOUNT_MAX_SIZE);
+    for (i = 0; dVal > 0 || i < 9; i++) {
+        if (dVal > 0) {
+            buffer[i] = (dVal % 10) + '0';
+            dVal /= 10;
+        } else {
+            buffer[i] = '0';
+        }
+        if (i == 4) { // satoshis to nim: 1 nim = 100000 satoshis
+            i += 1;
+            buffer[i] = '.';
+        }
+        if (i >= AMOUNT_MAX_SIZE) {
+            THROW(0x6700);
+        }
+    }
+    // reverse order
+    for (i -= 1, j = 0; i >= 0 && j < AMOUNT_MAX_SIZE-1; i--, j++) {
+        out[j] = buffer[i];
+    }
+    // strip trailing 0s
+    for (j -= 1; j > 0; j--) {
+        if (out[j] != '0') break;
+    }
+    j += 1;
+
+    // strip trailing .
+    if (out[j-1] == '.') j -= 1;
+
+    if (asset) {
+        // qualify amount
+        out[j++] = ' ';
+        strcpy(out + j, asset);
+        out[j+strlen(asset)] = '\0';
+    } else {
+        out[j] = '\0';
+    }
+
+}
+
+void print_long(uint64_t id, char *out) {
+    char buffer[AMOUNT_MAX_SIZE];
+    uint64_t dVal = id;
+    int i, j;
+
+    memset(buffer, 0, AMOUNT_MAX_SIZE);
+    for (i = 0; dVal > 0; i++) {
+        buffer[i] = (dVal % 10) + '0';
+        dVal /= 10;
+        if (i >= AMOUNT_MAX_SIZE) {
+            THROW(0x6700);
+        }
+    }
+    // reverse order
+    for (i -= 1, j = 0; i >= 0 && j < AMOUNT_MAX_SIZE-1; i--, j++) {
+        out[j] = buffer[i];
+    }
+    out[j] = '\0';
+}
+
+void print_int(uint32_t id, char *out) {
+    char buffer[10];
+    uint64_t dVal = id;
+    int i, j;
+
+    memset(buffer, 0, 10);
+    for (i = 0; dVal > 0; i++) {
+        buffer[i] = (dVal % 10) + '0';
+        dVal /= 10;
+        if (i >= 10) {
+            THROW(0x6700);
+        }
+    }
+    // reverse order
+    for (i -= 1, j = 0; i >= 0 && j < 10-1; i--, j++) {
+        out[j] = buffer[i];
+    }
+    if (j == 0) {
+        out[0] = '0';
+        j++;
+    }
+    out[j] = '\0';
+}
+
+
+void print_bits(uint32_t in, char *out) {
+    out[2] = (in & 0x01) ? '1' : '0';
+    out[1] = (in & 0x02) ? '1' : '0';
+    out[0] = (in & 0x04) ? '1' : '0';
+    out[3] = '\0';
+}
+
+void print_network_id(uint8_t *in, char *out) {
+    if (0 == in[0]) {
+        strcpy(out, "Main");
+    } else if (1 == in[0]) {
+        strcpy(out, "Test");
+    } else if (2 == in[0]) {
+        strcpy(out, "Development");
+    } else if (3 == in[0]) {
+        strcpy(out, "Bounty");
+    } else {
+        strcpy(out, "Unknown");
+    }
+}
+
+void print_caption(uint8_t operationType, uint8_t captionType, char *out) {
+    char *in = ((char*) PIC(captions[operationType][captionType]));
+    if (in) {
+        strcpy(out, in);
+    }
+}
+
+uint16_t readUInt16Block(uint8_t *buffer) {
+    return buffer[0] + (buffer[1] << 8);
+}
+
+uint32_t readUInt32Block(uint8_t *buffer) {
+    return buffer[3] + (buffer[2] << 8) + (buffer[1] <<  16) + (buffer[0] << 24);
+}
+
+uint64_t readUInt64Block(uint8_t *buffer) {
+    uint64_t i1 = buffer[3] + (buffer[2] << 8) + (buffer[1] <<  16) + (buffer[0] << 24);
+    buffer += 4;
+    uint32_t i2 = buffer[3] + (buffer[2] << 8) + (buffer[1] <<  16) + (buffer[0] << 24);
+    return i2 | (i1 << 32);
+}
+
+uint8_t printBits(uint8_t *buffer, char *out, char *prefix) {
+    uint32_t bitsPresent = readUInt32Block(buffer);
+    buffer += 4;
+    if (bitsPresent) {
+        uint32_t bits = readUInt32Block(buffer);
+        buffer += 4;
+        if (bits) {
+            uint8_t i = strlen(out);
+            if (i > 0) {
+                out[i++] = ';';
+                out[i++] = ' ';
+            }
+            strcpy(out+i, prefix);
+            i += strlen(prefix);
+            print_bits(bits, out+i);
+        }
+        return 8;
+    } else {
+        return 4;
+    }
+}
+
+void parseTx(uint8_t *buffer, txContent_t *txContent) {
+    txContent->operationType = OPERATION_TYPE_BASIC_TX;
+    uint16_t data_length = readUInt16Block(buffer);
+    buffer += 2;
+    if (0 != data_length) THROW(0x6c26); // XXX change for the correct error number
+    buffer += 20; // Ignore our own address
+    uint8_t sender_type = buffer[0];
+    buffer++;
+    if (0 != sender_type) THROW(0x6c27); // XXX change for the correct error number
+    print_address(buffer, txContent->recipient);
+    buffer += 20;
+    uint8_t recipient_type = buffer[0];
+    buffer++;
+    if (0 != recipient_type) THROW(0x6c28); // XXX change for the correct error number
+    uint64_t value = readUInt64Block(buffer);
+    print_amount(value, "NIM", txContent->value);
+    buffer += 8;
+    uint64_t fee = readUInt64Block(buffer);
+    print_amount(fee, "NIM", txContent->fee);
+    buffer += 8;
+    uint32_t validity_start = readUInt32Block(buffer);
+    print_int(validity_start, txContent->validity_start);
+    buffer += 4;
+    print_network_id(buffer, txContent->network);
+    buffer++;
+    uint8_t flags = buffer[0];
+    buffer++;
+    if (0 != flags) THROW(0x6c29); // XXX change for the correct error number
 }

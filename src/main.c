@@ -47,6 +47,7 @@ uint32_t set_result_get_publicKey(void);
 
 #define CLA 0xE0
 #define INS_GET_PUBLIC_KEY 0x02
+#define INS_SIGN_TX 0x04
 #define INS_GET_APP_CONFIGURATION 0x06
 #define P1_NO_SIGNATURE 0x00
 #define P1_SIGNATURE 0x01
@@ -64,7 +65,7 @@ uint32_t set_result_get_publicKey(void);
 #define OFFSET_LC 4
 #define OFFSET_CDATA 5
 
-#define MAX_UI_STEPS 10
+#define MAX_UI_STEPS 11
 
 #define MAX_RAW_TX 1024
 
@@ -75,7 +76,16 @@ typedef struct publicKeyContext_t {
     bool returnSignature;
 } publicKeyContext_t;
 
+typedef struct transactionContext_t {
+    uint8_t bip32PathLength;
+    uint32_t bip32Path[MAX_BIP32_PATH];
+    uint8_t rawTx[MAX_RAW_TX];
+    uint32_t rawTxLength;
+} transactionContext_t;
+
 publicKeyContext_t pkCtx;
+transactionContext_t txCtx;
+txContent_t txContent;
 
 volatile char operationCaption[15];
 
@@ -84,7 +94,6 @@ volatile char details1Caption[18];
 volatile char details2Caption[18];
 volatile char details3Caption[18];
 volatile char details4Caption[18];
-volatile char details5Caption[18];
 #elif defined(TARGET_BLUE)
 volatile char displayString[33];
 volatile char subtitleCaption[16];
@@ -100,6 +109,8 @@ volatile u2f_service_t u2fService;
 
 unsigned int io_seproxyhal_touch_settings(const bagl_element_t *e);
 unsigned int io_seproxyhal_touch_exit(const bagl_element_t *e);
+unsigned int io_seproxyhal_touch_tx_ok(const bagl_element_t *e);
+unsigned int io_seproxyhal_touch_tx_cancel(const bagl_element_t *e);
 unsigned int io_seproxyhal_touch_address_ok(const bagl_element_t *e);
 unsigned int io_seproxyhal_touch_address_cancel(const bagl_element_t *e);
 void ui_idle(void);
@@ -142,7 +153,7 @@ const bagl_element_t *ui_menu_item_out_over(const bagl_element_t *e) {
 
 #define COLOR_BG_1 0xF9F9F9
 #define COLOR_APP 0xF6AE2D
-#define COLOR_APP_LIGHT 0xFFFFFF
+#define COLOR_APP_LIGHT 0x93d1ed
 
 const bagl_element_t ui_idle_blue[] = {
     // type                               userid    x    y   w    h  str rad
@@ -452,6 +463,9 @@ unsigned int ui_settings_blue_button(unsigned int button_mask, unsigned int butt
     return 0;
 }
 
+#endif // #if defined(TARGET_NANOS)
+
+#if defined(TARGET_BLUE)
 const bagl_element_t ui_address_blue[] = {
     {{BAGL_RECTANGLE, 0x00, 0, 68, 320, 413, 0, 0, BAGL_FILL, COLOR_BG_1,
       0x000000, 0, 0},
@@ -670,6 +684,1026 @@ unsigned int ui_address_nanos_button(unsigned int button_mask,
                                      unsigned int button_mask_counter);
 #endif // #if defined(TARGET_NANOS)
 
+#if defined(TARGET_BLUE)
+
+char *ui_details_title;
+char *ui_details_content;
+typedef void (*callback_t)(void);
+callback_t ui_details_back_callback;
+
+const bagl_element_t * ui_details_blue_back_callback(const bagl_element_t *element) {
+    ui_details_back_callback();
+    return 0;
+}
+
+const bagl_element_t ui_details_blue[] = {
+    // type                               userid    x    y   w    h  str rad
+    // fill      fg        bg      fid iid  txt   touchparams...       ]
+
+    // erase screen (only under the status bar)
+    {{BAGL_RECTANGLE, 0x00, 0, 68, 320, 413, 0, 0, BAGL_FILL, COLOR_BG_1, 0x000000, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x00, 0, 20, 320, 48, 0, 0, BAGL_FILL, COLOR_APP, COLOR_APP, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    /// TOP STATUS BAR
+    {{BAGL_LABELINE, 0x01, 0, 45, 320, 30, 0, 0, BAGL_FILL, 0xFFFFFF, COLOR_APP,
+      BAGL_FONT_OPEN_SANS_SEMIBOLD_10_13PX | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     displayString,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE | BAGL_FLAG_TOUCHABLE, 0x00, 0, 19, 50, 44, 0, 0,
+      BAGL_FILL, COLOR_APP, COLOR_APP_LIGHT,
+      BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_CENTER |
+          BAGL_FONT_ALIGNMENT_MIDDLE,
+      0},
+     BAGL_FONT_SYMBOLS_0_LEFT,
+     0,
+     COLOR_APP,
+     0xFFFFFF,
+     ui_details_blue_back_callback,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x00, 30, 106, 320, 30, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     "VALUE",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x10, 30, 136, 320, 30, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX, 0},
+     displayString,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x11, 30, 159, 320, 30, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX, 0},
+     displayString,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x12, 30, 182, 320, 30, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX, 0},
+     displayString,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x00, 0, 450, 320, 14, 0, 0, 0, 0x999999, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_8_11PX | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Review the whole value before continuing.",
+     10,
+     0,
+     COLOR_BG_1,
+     NULL,
+     NULL,
+     NULL}
+};
+
+unsigned int ui_details_blue_prepro(const bagl_element_t *element) {
+    if (element->component.userid == 1) {
+        strcpy(displayString, (const char *)PIC(ui_details_title));
+    } else if (element->component.userid > 0) {
+        unsigned int length = strlen(ui_details_content);
+        if (length >= (element->component.userid & 0xF) * MAX_CHAR_PER_LINE) {
+            os_memset(displayString, 0, MAX_CHAR_PER_LINE + 1);
+            os_memmove(
+                displayString,
+                ui_details_content + (element->component.userid & 0xF) * MAX_CHAR_PER_LINE,
+                MIN(length - (element->component.userid & 0xF) * MAX_CHAR_PER_LINE, MAX_CHAR_PER_LINE));
+            return 1;
+        }
+        // nothing to draw for this line
+        return 0;
+    }
+    return 1;
+}
+
+unsigned int ui_details_blue_button(unsigned int button_mask, unsigned int button_mask_counter) {
+    return 0;
+}
+
+void ui_approval_blue_init(void);
+
+bagl_element_callback_t ui_approval_blue_ok;
+bagl_element_callback_t ui_approval_blue_cancel;
+
+const bagl_element_t *ui_approval_blue_ok_callback(const bagl_element_t *e) {
+    return ui_approval_blue_ok(e);
+}
+
+const bagl_element_t * ui_approval_blue_cancel_callback(const bagl_element_t *e) {
+    return ui_approval_blue_cancel(e);
+}
+
+const char *ui_approval_blue_values[7];
+
+const char *const ui_approval_blue_details_name[][7] = {
+    { "START BALANCE", "ACCOUNT ID", NULL, NULL, NULL, "FEE", "MEMO" },
+    { "AMOUNT", "DESTINATION", NULL, NULL, NULL, "FEE", "MEMO" },
+    { "SEND", "RECEIVE", "DESTINATION", "PATH", NULL, "FEE", "MEMO" },
+    { "BUY", "PRICE", "SELL", NULL, NULL, "FEE", "MEMO"},
+    { "BUY", "PRICE", "OFFER ID", NULL, NULL, "FEE", "MEMO"},
+    { "BUY", "PRICE", "SELL", NULL, NULL, "FEE", "MEMO"},
+    { "BUY", "PRICE", "SELL", NULL, NULL, "FEE", "MEMO"},
+    { "INFL DEST", "FLAGS", "THRESHOLDS", "HOME DOMAIN", "SIGNER", "FEE", "MEMO"},
+    { "ASSET", "ISSUER", "LIMIT", NULL, NULL, "FEE", "MEMO"},
+    { "ASSET", "ISSUER", NULL, NULL, NULL, "FEE", "MEMO"},
+    { "ACCOUNT ID", "ASSET", NULL, NULL, NULL, "FEE", "MEMO"},
+    { "ACCOUNT ID", "ASSET", NULL, NULL, NULL, "FEE", "MEMO"},
+    { "DESTINATION", NULL, NULL, NULL, NULL, "FEE", "MEMO"},
+    {  NULL, NULL, NULL, NULL, NULL, "FEE", "MEMO"},
+    { "NAME", "VALUE", NULL, NULL, NULL, "FEE", "MEMO"}
+
+};
+
+const bagl_element_t *ui_approval_common_show_details(unsigned int detailidx) {
+    if (ui_approval_blue_values[detailidx] != NULL &&
+        strlen(ui_approval_blue_values[detailidx]) * BAGL_FONT_OPEN_SANS_LIGHT_16_22PX_AVG_WIDTH >= 160) {
+        // display details screen
+        ui_details_title = ui_approval_blue_details_name[txContent.operationType][detailidx];
+        ui_details_content = ui_approval_blue_values[detailidx];
+        ui_details_back_callback = ui_approval_blue_init;
+        UX_DISPLAY(ui_details_blue, ui_details_blue_prepro);
+    }
+    return NULL;
+}
+
+const bagl_element_t *ui_approval_blue_1_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(0);
+}
+
+const bagl_element_t *ui_approval_blue_2_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(1);
+}
+
+const bagl_element_t *ui_approval_blue_3_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(2);
+}
+
+const bagl_element_t *ui_approval_blue_4_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(3);
+}
+
+const bagl_element_t *ui_approval_blue_5_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(4);
+}
+
+const bagl_element_t *ui_approval_blue_fee_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(5);
+}
+
+const bagl_element_t *ui_approval_blue_memo_details(const bagl_element_t *e) {
+    return ui_approval_common_show_details(6);
+}
+
+const bagl_element_t ui_approval_blue[] = {
+    {{BAGL_RECTANGLE, 0x00, 0, 68, 320, 413, 0, 0, BAGL_FILL, COLOR_BG_1, 0x000000, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // erase screen (only under the status bar)
+    {{BAGL_RECTANGLE, 0x00, 0, 20, 320, 48, 0, 0, BAGL_FILL, COLOR_APP, COLOR_APP, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    /// TOP STATUS BAR
+    {{BAGL_LABELINE, 0x60, 0, 45, 320, 30, 0, 0, BAGL_FILL, 0xFFFFFF, COLOR_APP, BAGL_FONT_OPEN_SANS_SEMIBOLD_10_13PX | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "CONFIRM TRANSACTION",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // BADGE_TRANSACTION.GIF
+    {{BAGL_ICON, 0x40, 30, 98, 50, 50, 0, 0, BAGL_FILL, 0, COLOR_BG_1, 0, 0},
+     &C_badge_transaction,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x50, 100, 117, 320, 30, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX, 0},
+     operationCaption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x00, 100, 138, 320, 30, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     subtitleCaption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // Fee
+    {{BAGL_LABELINE, 0x75, 30, 179, 120, 20, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x15, 130, 179, 160, 20, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     txContent.fee,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x25, 284, 179, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 158, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_fee_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x25, 0, 158, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x35, 30, 192, 260, 1, 1, 0, 0, 0xEEEEEE, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // Memo
+    {{BAGL_LABELINE, 0x76, 30, 214, 100, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x16, 130, 214, 160, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x26, 284, 214, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 193, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_memo_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x26, 0, 193, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x36, 30, 227, 260, 1, 1, 0, 0, 0xEEEEEE, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // Details 1
+    {{BAGL_LABELINE, 0x70, 30, 249, 120, 20, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x10, 130, 249, 160, 20, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x20, 284, 249, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 228, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_1_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x20, 0, 228, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x31, 30, 262, 260, 1, 1, 0, 0, 0xEEEEEE, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // Details 2
+    {{BAGL_LABELINE, 0x71, 30, 284, 100, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x11, 130, 284, 160, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x21, 284, 284, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 263, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_2_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x21, 0, 263, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x32, 30, 297, 260, 1, 1, 0, 0, 0xEEEEEE, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x72, 30, 319, 100, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x12, 130, 319, 160, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x22, 284, 319, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 298, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_3_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x22, 0, 298, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x33, 30, 332, 260, 1, 1, 0, 0, 0xEEEEEE, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x73, 30, 354, 100, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x13, 130, 354, 160, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x23, 284, 354, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 333, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_4_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x23, 0, 333, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE, 0x34, 30, 367, 260, 1, 1, 0, 0, 0xEEEEEE, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    // Details 5
+    {{BAGL_LABELINE, 0x74, 30, 389, 100, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_SEMIBOLD_8_11PX, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    // x-18 when ...
+    {{BAGL_LABELINE, 0x14, 130, 389, 160, 23, 0, 0, BAGL_FILL, 0x000000, COLOR_BG_1, BAGL_FONT_OPEN_SANS_REGULAR_10_13PX | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x24, 284, 389, 6, 16, 0, 0, BAGL_FILL, 0x999999, COLOR_BG_1, BAGL_FONT_SYMBOLS_0 | BAGL_FONT_ALIGNMENT_RIGHT, 0},
+     BAGL_FONT_SYMBOLS_0_MINIRIGHT,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_NONE | BAGL_FLAG_TOUCHABLE, 0x80, 0, 368, 320, 34, 0, 9, BAGL_FILL, 0xFFFFFF, 0x000000, 0, 0},
+     NULL,
+     0,
+     0xEEEEEE,
+     0x000000,
+     ui_approval_blue_5_details,
+     ui_menu_item_out_over,
+     ui_menu_item_out_over},
+    {{BAGL_RECTANGLE, 0x24, 0, 368, 5, 34, 0, 0, BAGL_FILL, COLOR_BG_1, COLOR_BG_1, 0, 0},
+     NULL,
+     0,
+     0x41CCB4,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_RECTANGLE | BAGL_FLAG_TOUCHABLE, 0x00, 40, 414, 115, 36, 0, 18,
+      BAGL_FILL, 0xCCCCCC, COLOR_BG_1,
+      BAGL_FONT_OPEN_SANS_REGULAR_11_14PX | BAGL_FONT_ALIGNMENT_CENTER |
+          BAGL_FONT_ALIGNMENT_MIDDLE,
+      0},
+     "REJECT",
+     0,
+     0xB7B7B7,
+     COLOR_BG_1,
+     ui_approval_blue_cancel_callback,
+     NULL,
+     NULL},
+    {{BAGL_RECTANGLE | BAGL_FLAG_TOUCHABLE, 0x00, 165, 414, 115, 36, 0, 18,
+      BAGL_FILL, 0x41ccb4, COLOR_BG_1,
+      BAGL_FONT_OPEN_SANS_REGULAR_11_14PX | BAGL_FONT_ALIGNMENT_CENTER |
+          BAGL_FONT_ALIGNMENT_MIDDLE,
+      0},
+     "CONFIRM",
+     0,
+     0x3ab7a2,
+     COLOR_BG_1,
+     ui_approval_blue_ok_callback,
+     NULL,
+     NULL},
+
+};
+
+const bagl_element_t *ui_approval_blue_prepro(const bagl_element_t *element) {
+    if (element->component.userid == 0) {
+        return 1;
+    }
+    // none elements are skipped
+    if ((element->component.type & (~BAGL_FLAG_TOUCHABLE)) == BAGL_NONE) {
+        return 0;
+    } else {
+        switch (element->component.userid & 0xF0) {
+        // touchable nonetype entries, skip them to avoid latencies (to be fixed in the sdk later on)
+        case 0x80:
+            return 0;
+
+        // icon
+        case 0x40:
+        // TITLE
+        case 0x60:
+        // SUBLINE
+        case 0x50:
+            return 1;
+
+        // details label
+        case 0x70:
+            if (!ui_approval_blue_details_name[txContent.operationType][element->component.userid & 0xF]) {
+                return NULL;
+            }
+            os_memmove(&tmp_element, element, sizeof(bagl_element_t));
+            tmp_element.text = ui_approval_blue_details_name[txContent.operationType][element->component.userid & 0xF];
+            return &tmp_element;
+
+        // detail value
+        case 0x10:
+            if (!ui_approval_blue_details_name[txContent.operationType][element->component.userid & 0xF]) {
+                return NULL;
+            }
+            os_memmove(&tmp_element, element, sizeof(bagl_element_t));
+            tmp_element.text = ui_approval_blue_values[(element->component.userid & 0xF)];
+
+            // x -= 18 when overflow is detected
+            if (strlen(ui_approval_blue_values[(element->component.userid & 0xF)]) * BAGL_FONT_OPEN_SANS_REGULAR_10_13PX_AVG_WIDTH >= 160) {
+                tmp_element.component.x -= 18;
+            }
+            return &tmp_element;
+
+        // right arrow and left selection rectangle
+        case 0x20:
+            if (!ui_approval_blue_details_name[txContent.operationType][element->component.userid & 0xF]) {
+                return NULL;
+            }
+            if (strlen(ui_approval_blue_values[(element->component.userid & 0xF)]) * BAGL_FONT_OPEN_SANS_REGULAR_10_13PX_AVG_WIDTH < 160) {
+                return NULL;
+            }
+
+        // horizontal delimiter
+        case 0x30:
+            return ui_approval_blue_details_name[txContent.operationType][element->component.userid & 0xF] != NULL
+                       ? element
+                       : NULL;
+        }
+    }
+    return element;
+}
+unsigned int ui_approval_blue_button(unsigned int button_mask, unsigned int button_mask_counter) {
+    return 0;
+}
+
+void ui_approval_blue_init(void) {
+    UX_DISPLAY(ui_approval_blue, ui_approval_blue_prepro);
+}
+
+void ui_approve_tx_blue_init(void) {
+    ui_approval_blue_ok = (bagl_element_callback_t)io_seproxyhal_touch_tx_ok;
+    ui_approval_blue_cancel = (bagl_element_callback_t)io_seproxyhal_touch_tx_cancel;
+    os_memset(ui_approval_blue_values, 0, sizeof(ui_approval_blue_values));
+    ui_approval_blue_values[0] = txContent.details1;
+    ui_approval_blue_values[1] = txContent.details2;
+    ui_approval_blue_values[2] = txContent.details3;
+    ui_approval_blue_values[3] = txContent.details4;
+    ui_approval_blue_values[4] = txContent.details5;
+    ui_approval_blue_values[5] = txContent.fee;
+    ui_approval_blue_values[6] = txContent.memo;
+    strcpy(subtitleCaption, txContent.network);
+    strcpy(subtitleCaption + strlen(txContent.network), " Network");
+    ui_approval_blue_init();
+}
+
+#endif // #if defined(TARGET_BLUE)
+
+#if defined(TARGET_NANOS)
+// component id steps for different types of operations
+const uint8_t ui_elements_map[][MAX_UI_STEPS] = {
+  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x00, 0x00, 0x00 }, // basic tx
+  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11 }  // extended tx
+};
+
+unsigned int ui_tx_approval_prepro(const bagl_element_t *element) {
+    unsigned int display = 1;
+    if (element->component.userid > 0) {
+        display = (ui_elements_map[txContent.operationType][ux_step] == element->component.userid);
+        if (display) {
+            UX_CALLBACK_SET_INTERVAL(MAX(2000, 1000 + bagl_label_roundtrip_duration_ms(element, 7)));
+        }
+    }
+    return display;
+}
+
+const bagl_element_t ui_approve_tx_nanos[] = {
+    // {
+    //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
+    //      bgcolor, font_id, icon_id},
+    //     text,
+    //     touch_area_brim,
+    //     overfgcolor,
+    //     overbgcolor,
+    //     tap,
+    //     out,
+    //     over}
+    // }
+
+    {{BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000, 0xFFFFFF,
+      0, 0},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_ICON, 0x00, 3, 12, 7, 7, 0, 0, 0, 0xFFFFFF, 0x000000, 0,
+      BAGL_GLYPH_ICON_CROSS},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_ICON, 0x00, 117, 13, 8, 6, 0, 0, 0, 0xFFFFFF, 0x000000, 0,
+      BAGL_GLYPH_ICON_CHECK},
+     NULL,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    //{{BAGL_ICON                           , 0x01,  21,   9,  14,  14, 0, 0, 0
+    //, 0xFFFFFF, 0x000000, 0, BAGL_GLYPH_ICON_TRANSACTION_BADGE  }, NULL, 0, 0,
+    //0, NULL, NULL, NULL },
+    {{BAGL_LABELINE, 0x01, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Confirm",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x01, 0, 26, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "operation",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x02, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Operation Type",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x02, 16, 26, 96, 12, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     (char*) operationCaption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x03, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Recipient",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x03, 16, 26, 96, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.recipient,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x04, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Amount",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x04, 16, 26, 96, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.value,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x05, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Fee",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x05, 16, 26, 96, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.fee,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x06, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Validity Start",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x06, 16, 26, 96, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.validity_start,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x07, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "Network",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x07, 16, 26, 96, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.network,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x08, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     (char*) details1Caption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x08, 16, 26, 96, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.details1,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x09, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     (char*) details2Caption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x09, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.details2,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x10, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     (char*) details3Caption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x10, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.details3,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x11, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     (char*) details4Caption,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x1, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+     txContent.details4,
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+
+    {{BAGL_LABELINE, 0x20, 0, 12, 128, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "No details",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL},
+    {{BAGL_LABELINE, 0x20, 23, 26, 82, 32, 0, 0, 0, 0xFFFFFF, 0x000000,
+      BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+     "available",
+     0,
+     0,
+     0,
+     NULL,
+     NULL,
+     NULL}
+
+};
+#endif // #if defined(TARGET_NANOS)
+
 void ui_idle(void) {
 #if defined(TARGET_BLUE)
     UX_DISPLAY(ui_idle_blue, NULL);
@@ -746,6 +1780,90 @@ unsigned int ui_address_nanos_button(unsigned int button_mask,
     }
     return 0;
 }
+#endif // #if defined(TARGET_NANOS)
+
+unsigned int io_seproxyhal_touch_tx_ok(const bagl_element_t *e) {
+    uint32_t tx = 0;
+
+    // initialize private key
+    uint8_t privateKeyData[32];
+    cx_ecfp_private_key_t privateKey;
+    os_perso_derive_node_bip32(CX_CURVE_Ed25519, txCtx.bip32Path, txCtx.bip32PathLength, privateKeyData, NULL);
+    cx_ecfp_init_private_key(CX_CURVE_Ed25519, privateKeyData, 32, &privateKey);
+    os_memset(privateKeyData, 0, sizeof(privateKeyData));
+
+    // sign hash
+#if CX_APILEVEL >= 8
+    tx = cx_eddsa_sign(&privateKey, CX_LAST, CX_SHA512, txCtx.rawTx, 66, NULL, 0, G_io_apdu_buffer, NULL);
+#else
+    tx = cx_eddsa_sign(&privateKey, NULL, CX_LAST, CX_SHA512, txCtx.rawTx, 66, G_io_apdu_buffer);
+#endif
+    os_memset(&privateKey, 0, sizeof(privateKey));
+
+    G_io_apdu_buffer[tx++] = 0x90;
+    G_io_apdu_buffer[tx++] = 0x00;
+
+#ifdef HAVE_U2F
+    if (fidoActivated) {
+        u2f_proxy_response((u2f_service_t *)&u2fService, tx);
+    } else {
+        // Send back the response, do not restart the event loop
+        io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, tx);
+    }
+#else  // HAVE_U2F
+    // Send back the response, do not restart the event loop
+    io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, tx);
+#endif // HAVE_U2F
+    // Display back the original UX
+    ui_idle();
+
+    return 0; // do not redraw the widget
+}
+
+unsigned int io_seproxyhal_touch_tx_cancel(const bagl_element_t *e) {
+    G_io_apdu_buffer[0] = 0x69;
+    G_io_apdu_buffer[1] = 0x85;
+#ifdef HAVE_U2F
+    if (fidoActivated) {
+        u2f_proxy_response((u2f_service_t *)&u2fService, 2);
+    } else {
+        // Send back the response, do not restart the event loop
+        io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, 2);
+    }
+#else  // HAVE_U2F
+    // Send back the response, do not restart the event loop
+    io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, 2);
+#endif // HAVE_U2F
+    // Display back the original UX
+    ui_idle();
+    return 0; // do not redraw the widget
+}
+
+#if defined(TARGET_NANOS)
+unsigned int ui_approve_tx_nanos_button(unsigned int button_mask, unsigned int button_mask_counter) {
+    switch (button_mask) {
+    case BUTTON_EVT_RELEASED | BUTTON_LEFT:
+        io_seproxyhal_touch_tx_cancel(NULL);
+        break;
+
+    case BUTTON_EVT_RELEASED | BUTTON_RIGHT: {
+        io_seproxyhal_touch_tx_ok(NULL);
+        break;
+    }
+    }
+    return 0;
+}
+
+uint8_t countSteps(uint8_t operationType) {
+    uint8_t i;
+    for (i = 0; i < MAX_UI_STEPS; i++) {
+        if (ui_elements_map[operationType][i] == 0x00) {
+            return i;
+        }
+    }
+    return MAX_UI_STEPS;
+}
+
 #endif // #if defined(TARGET_NANOS)
 
 unsigned short io_exchange_al(unsigned char channel, unsigned short tx_len) {
@@ -889,6 +2007,68 @@ void handleGetAppConfiguration(volatile unsigned int *tx) {
     THROW(0x9000);
 }
 
+void handleSignTx(uint8_t p1, uint8_t p2, uint8_t *dataBuffer, uint16_t dataLength, volatile unsigned int *flags, volatile unsigned int *tx) {
+
+    if ((p1 != P1_FIRST) && (p1 != P1_MORE)) {
+        THROW(0x6B00);
+    }
+    if ((p2 != P2_LAST) && (p2 != P2_MORE)) {
+        THROW(0x6B00);
+    }
+
+    if (p1 == P1_FIRST) {
+        // read the bip32 path
+        txCtx.bip32PathLength = readBip32Path(dataBuffer, txCtx.bip32Path);
+        dataBuffer += 1 + txCtx.bip32PathLength * 4;
+        dataLength -= 1 + txCtx.bip32PathLength * 4;
+
+        // read raw tx data
+        txCtx.rawTxLength = dataLength;
+        os_memmove(txCtx.rawTx, dataBuffer, dataLength);
+    } else {
+        // read more raw tx data
+        uint32_t offset = txCtx.rawTxLength;
+        txCtx.rawTxLength += dataLength;
+        if (txCtx.rawTxLength > MAX_RAW_TX) {
+            THROW(0x6700);
+        }
+        os_memmove(txCtx.rawTx+offset, dataBuffer, dataLength);
+    }
+
+    if (p2 == P2_MORE) {
+        THROW(0x9000);
+    }
+
+    os_memset(&txContent, 0, sizeof(txContent));
+    parseTx(txCtx.rawTx, &txContent);
+
+    // prepare for display
+    os_memset((char *)operationCaption, 0, sizeof(operationCaption));
+    print_caption(txContent.operationType, CAPTION_TYPE_OPERATION, (char *)operationCaption);
+
+#if defined(TARGET_NANOS)
+    os_memset((char *)details1Caption, 0, sizeof(details1Caption));
+    os_memset((char *)details2Caption, 0, sizeof(details2Caption));
+    os_memset((char *)details4Caption, 0, sizeof(details4Caption));
+    os_memset((char *)details3Caption, 0, sizeof(details3Caption));
+    print_caption(txContent.operationType, CAPTION_TYPE_DETAILS1, (char *)details1Caption);
+    print_caption(txContent.operationType, CAPTION_TYPE_DETAILS2, (char *)details2Caption);
+    print_caption(txContent.operationType, CAPTION_TYPE_DETAILS3, (char *)details3Caption);
+    print_caption(txContent.operationType, CAPTION_TYPE_DETAILS4, (char *)details4Caption);
+#endif // #if TARGET
+
+#if defined(TARGET_BLUE)
+    ux_step_count = 0;
+    ui_approve_tx_blue_init();
+#elif defined(TARGET_NANOS)
+    ux_step = 0;
+    ux_step_count = countSteps(txContent.operationType);
+    UX_DISPLAY(ui_approve_tx_nanos, ui_tx_approval_prepro);
+#endif // #if TARGET
+
+    *flags |= IO_ASYNCH_REPLY;
+}
+
 void handleApdu(volatile unsigned int *flags, volatile unsigned int *tx) {
     unsigned short sw = 0;
 
@@ -907,6 +2087,13 @@ void handleApdu(volatile unsigned int *flags, volatile unsigned int *tx) {
                                    flags, tx);
                 break;
 
+            case INS_SIGN_TX:
+                handleSignTx(G_io_apdu_buffer[OFFSET_P1],
+                             G_io_apdu_buffer[OFFSET_P2],
+                             G_io_apdu_buffer + OFFSET_CDATA,
+                             G_io_apdu_buffer[OFFSET_LC], flags, tx);
+                break;
+
             case INS_GET_APP_CONFIGURATION:
                 handleGetAppConfiguration(tx);
                 break;
@@ -921,6 +2108,7 @@ void handleApdu(volatile unsigned int *flags, volatile unsigned int *tx) {
             case 0x6000:
                 // Wipe the transaction context and report the exception
                 sw = e;
+                os_memset(&txContent, 0, sizeof(txContent));
                 break;
             case 0x9000:
                 // All is well
@@ -950,8 +2138,9 @@ void sample_main(void) {
     // DESIGN NOTE: the bootloader ignores the way APDU are fetched. The only
     // goal is to retrieve APDU.
     // When APDU are to be fetched from multiple IOs, like NFC+USB+BLE, make
-    // sure the io_event is called with a switch event, before the apdu is
-    // replied to the bootloader. This avoid APDU injection faults.
+    // sure the io_event is called with a
+    // switch event, before the apdu is replied to the bootloader. This avoid
+    // APDU injection faults.
     for (;;) {
         volatile unsigned short sw = 0;
 
@@ -976,6 +2165,7 @@ void sample_main(void) {
                 case 0x6000:
                     // Wipe the transaction context and report the exception
                     sw = e;
+                    os_memset(&txContent, 0, sizeof(txContent));
                     break;
                 case 0x9000:
                     // All is well
@@ -1078,6 +2268,7 @@ __attribute__((section(".boot"))) int main(void) {
     os_boot();
 
     for (;;) {
+        os_memset(&txContent, 0, sizeof(txContent));
 
         UX_INIT();
         BEGIN_TRY {
