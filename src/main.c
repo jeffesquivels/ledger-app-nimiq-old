@@ -1413,7 +1413,7 @@ void ui_approve_tx_blue_init(void) {
 #if defined(TARGET_NANOS)
 // component id steps for different types of operations
 const uint8_t ui_elements_map[][MAX_UI_STEPS] = {
-  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x00, 0x00, 0x00 }, // basic tx
+  { 0x01, 0x02, 0x04, 0x05, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // basic tx
   { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11 }  // extended tx
 };
 
@@ -2049,8 +2049,8 @@ void handleSignTx(uint8_t p1, uint8_t p2, uint8_t *dataBuffer, uint16_t dataLeng
 #if defined(TARGET_NANOS)
     os_memset((char *)details1Caption, 0, sizeof(details1Caption));
     os_memset((char *)details2Caption, 0, sizeof(details2Caption));
-    os_memset((char *)details4Caption, 0, sizeof(details4Caption));
     os_memset((char *)details3Caption, 0, sizeof(details3Caption));
+    os_memset((char *)details4Caption, 0, sizeof(details4Caption));
     print_caption(txContent.operationType, CAPTION_TYPE_DETAILS1, (char *)details1Caption);
     print_caption(txContent.operationType, CAPTION_TYPE_DETAILS2, (char *)details2Caption);
     print_caption(txContent.operationType, CAPTION_TYPE_DETAILS3, (char *)details3Caption);

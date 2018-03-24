@@ -19,38 +19,7 @@
 #define _NIMIQ_UTILS_H_
 
 #include <stdint.h>
-
-#ifdef TEST
-#include <stdio.h>
-#define THROW(code) { printf("error: %d", code); return; }
-#define PRINTF(msg, arg) printf(msg, arg)
-#define PIC(code) code
-#define TARGET_NANOS 1
-#else
 #include "os.h"
-#endif // TEST
-
-#define ASSET_TYPE_NATIVE 0
-#define ASSET_TYPE_CREDIT_ALPHANUM4 1
-#define ASSET_TYPE_CREDIT_ALPHANUM12 2
-
-#define MEMO_TYPE_NONE 0
-#define MEMO_TYPE_TEXT 1
-#define MEMO_TYPE_ID 2
-#define MEMO_TYPE_HASH 3
-#define MEMO_TYPE_RETURN 4
-
-#define XDR_OPERATION_TYPE_CREATE_ACCOUNT 0
-#define XDR_OPERATION_TYPE_PAYMENT 1
-#define XDR_OPERATION_TYPE_PATH_PAYMENT 2
-#define XDR_OPERATION_TYPE_MANAGE_OFFER 3
-#define XDR_OPERATION_TYPE_CREATE_PASSIVE_OFFER 4
-#define XDR_OPERATION_TYPE_SET_OPTIONS 5
-#define XDR_OPERATION_TYPE_CHANGE_TRUST 6
-#define XDR_OPERATION_TYPE_ALLOW_TRUST 7
-#define XDR_OPERATION_TYPE_ACCOUNT_MERGE 8
-#define XDR_OPERATION_TYPE_INFLATION 9
-#define XDR_OPERATION_TYPE_MANAGE_DATA 10
 
 #define OPERATION_TYPE_BASIC_TX 0
 
@@ -82,17 +51,13 @@ typedef struct txContent_t {
 
 void parseTx(uint8_t *buffer, txContent_t *txContent);
 
-void public_key_to_address(uint8_t *in, char *out);
+void print_address(uint8_t *in, char *out);
 
 void print_public_key(uint8_t *in, char *out);
-
-void print_long(uint64_t id, char *out);
 
 void print_network_id(uint8_t *in, char *out);
 
 void print_caption(uint8_t operationType, uint8_t captionType, char *out);
-
-void print_bits(uint32_t in, char *out);
 
 void print_int(uint32_t in, char *out);
 

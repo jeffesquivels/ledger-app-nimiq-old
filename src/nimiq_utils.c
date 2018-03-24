@@ -22,10 +22,6 @@
 #include "blake2b.h"
 #include "base32.h"
 
-#define SIGNER_KEY_TYPE_ED25519 0
-#define SIGNER_KEY_TYPE_PRE_AUTH_TX 1
-#define SIGNER_KEY_TYPE_HASH_X 2
-
 static const char * captions[][5] = {
     {"Basic Tx", NULL, NULL, NULL, NULL},
     {"Extended Tx", "Data", "Sender", "Sender Type", "Recipient Type"} // For future use, not yet supported
@@ -84,20 +80,6 @@ void iban_check(char in[36], char *check) {
     }
 
     snprintf(check, 3, "%02d", 98 - modulo);
-}
-
-void public_key_to_address(uint8_t *in, char *out) {
-    uint8_t buffer[35];
-    buffer[0] = 6 << 3; // version bit 'G'
-    int i;
-    for (i = 0; i < 32; i++) {
-        buffer[i+1] = in[i];
-    }
-    short crc = 0;
-    buffer[33] = crc;
-    buffer[34] = crc >> 8;
-    base32_encode(buffer, 35, out, 56);
-    out[56] = '\0';
 }
 
 void print_address(uint8_t *in, char *out) {
@@ -181,26 +163,6 @@ void print_amount(uint64_t amount, char *asset, char *out) {
 
 }
 
-void print_long(uint64_t id, char *out) {
-    char buffer[AMOUNT_MAX_SIZE];
-    uint64_t dVal = id;
-    int i, j;
-
-    memset(buffer, 0, AMOUNT_MAX_SIZE);
-    for (i = 0; dVal > 0; i++) {
-        buffer[i] = (dVal % 10) + '0';
-        dVal /= 10;
-        if (i >= AMOUNT_MAX_SIZE) {
-            THROW(0x6700);
-        }
-    }
-    // reverse order
-    for (i -= 1, j = 0; i >= 0 && j < AMOUNT_MAX_SIZE-1; i--, j++) {
-        out[j] = buffer[i];
-    }
-    out[j] = '\0';
-}
-
 void print_int(uint32_t id, char *out) {
     char buffer[10];
     uint64_t dVal = id;
@@ -223,14 +185,6 @@ void print_int(uint32_t id, char *out) {
         j++;
     }
     out[j] = '\0';
-}
-
-
-void print_bits(uint32_t in, char *out) {
-    out[2] = (in & 0x01) ? '1' : '0';
-    out[1] = (in & 0x02) ? '1' : '0';
-    out[0] = (in & 0x04) ? '1' : '0';
-    out[3] = '\0';
 }
 
 void print_network_id(uint8_t *in, char *out) {
@@ -267,28 +221,6 @@ uint64_t readUInt64Block(uint8_t *buffer) {
     buffer += 4;
     uint32_t i2 = buffer[3] + (buffer[2] << 8) + (buffer[1] <<  16) + (buffer[0] << 24);
     return i2 | (i1 << 32);
-}
-
-uint8_t printBits(uint8_t *buffer, char *out, char *prefix) {
-    uint32_t bitsPresent = readUInt32Block(buffer);
-    buffer += 4;
-    if (bitsPresent) {
-        uint32_t bits = readUInt32Block(buffer);
-        buffer += 4;
-        if (bits) {
-            uint8_t i = strlen(out);
-            if (i > 0) {
-                out[i++] = ';';
-                out[i++] = ' ';
-            }
-            strcpy(out+i, prefix);
-            i += strlen(prefix);
-            print_bits(bits, out+i);
-        }
-        return 8;
-    } else {
-        return 4;
-    }
 }
 
 void parseTx(uint8_t *buffer, txContent_t *txContent) {
