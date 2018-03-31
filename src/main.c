@@ -826,22 +826,8 @@ const bagl_element_t * ui_approval_blue_cancel_callback(const bagl_element_t *e)
 const char *ui_approval_blue_values[7];
 
 const char *const ui_approval_blue_details_name[][7] = {
-    { "START BALANCE", "ACCOUNT ID", NULL, NULL, NULL, "FEE", "MEMO" },
-    { "AMOUNT", "DESTINATION", NULL, NULL, NULL, "FEE", "MEMO" },
-    { "SEND", "RECEIVE", "DESTINATION", "PATH", NULL, "FEE", "MEMO" },
-    { "BUY", "PRICE", "SELL", NULL, NULL, "FEE", "MEMO"},
-    { "BUY", "PRICE", "OFFER ID", NULL, NULL, "FEE", "MEMO"},
-    { "BUY", "PRICE", "SELL", NULL, NULL, "FEE", "MEMO"},
-    { "BUY", "PRICE", "SELL", NULL, NULL, "FEE", "MEMO"},
-    { "INFL DEST", "FLAGS", "THRESHOLDS", "HOME DOMAIN", "SIGNER", "FEE", "MEMO"},
-    { "ASSET", "ISSUER", "LIMIT", NULL, NULL, "FEE", "MEMO"},
-    { "ASSET", "ISSUER", NULL, NULL, NULL, "FEE", "MEMO"},
-    { "ACCOUNT ID", "ASSET", NULL, NULL, NULL, "FEE", "MEMO"},
-    { "ACCOUNT ID", "ASSET", NULL, NULL, NULL, "FEE", "MEMO"},
-    { "DESTINATION", NULL, NULL, NULL, NULL, "FEE", "MEMO"},
-    {  NULL, NULL, NULL, NULL, NULL, "FEE", "MEMO"},
-    { "NAME", "VALUE", NULL, NULL, NULL, "FEE", "MEMO"}
-
+    { "RECIPIENT", "AMOUNT", "FEE", "VALIDITY START", NULL, NULL, NULL },
+    { "FEE", "VALIDITY START", "SENDER", "DATA", "RECIPIENT", "AMOUNT", NULL }
 };
 
 const bagl_element_t *ui_approval_common_show_details(unsigned int detailidx) {
@@ -906,7 +892,7 @@ const bagl_element_t ui_approval_blue[] = {
 
     /// TOP STATUS BAR
     {{BAGL_LABELINE, 0x60, 0, 45, 320, 30, 0, 0, BAGL_FILL, 0xFFFFFF, COLOR_APP, BAGL_FONT_OPEN_SANS_SEMIBOLD_10_13PX | BAGL_FONT_ALIGNMENT_CENTER, 0},
-     "CONFIRM TRANSACTION",
+     "CONFIRM OPERATION",
      0,
      0,
      0,
@@ -1396,13 +1382,12 @@ void ui_approve_tx_blue_init(void) {
     ui_approval_blue_ok = (bagl_element_callback_t)io_seproxyhal_touch_tx_ok;
     ui_approval_blue_cancel = (bagl_element_callback_t)io_seproxyhal_touch_tx_cancel;
     os_memset(ui_approval_blue_values, 0, sizeof(ui_approval_blue_values));
-    ui_approval_blue_values[0] = txContent.details1;
-    ui_approval_blue_values[1] = txContent.details2;
-    ui_approval_blue_values[2] = txContent.details3;
-    ui_approval_blue_values[3] = txContent.details4;
-    ui_approval_blue_values[4] = txContent.details5;
-    ui_approval_blue_values[5] = txContent.fee;
-    ui_approval_blue_values[6] = txContent.memo;
+    ui_approval_blue_values[0] = txContent.recipient;
+    ui_approval_blue_values[1] = txContent.value;
+    ui_approval_blue_values[2] = txContent.fee;
+    ui_approval_blue_values[3] = txContent.validity_start;
+    ui_approval_blue_values[4] = txContent.details1;
+    ui_approval_blue_values[5] = txContent.details2;
     strcpy(subtitleCaption, txContent.network);
     strcpy(subtitleCaption + strlen(txContent.network), " Network");
     ui_approval_blue_init();
